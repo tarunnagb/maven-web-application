@@ -7,8 +7,8 @@ phases:
       - mvn clean package -DskipTests
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - echo "Repository URI: $REPOSITORY_URI"
-      - echo "Image Tag: $IMAGE_TAG"
+        #- echo "Repository URI: $REPOSITORY_URI"
+        #- echo "Image Tag: $IMAGE_TAG"
 
   build:
     commands:
@@ -24,6 +24,6 @@ phases:
       - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:latest" > imagedefinitions.json
 
 artifacts:
-  files: 
+  files:
     - imagedefinitions.json
 
