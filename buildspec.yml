@@ -14,12 +14,12 @@ phases:
     commands:
       - echo "Building the Docker image..."
       - docker build -t $REPONAME .
-      - docker tag $REPONAME:latest $REPOSITORY_URI:1
+      - docker tag $REPONAME:latest $REPOSITORY_URI:2
 
   post_build:
     commands:
       - echo "Pushing Docker images to Amazon ECR..."
-      - docker push $REPOSITORY_URI:1
+      - docker push $REPOSITORY_URI:2
       - echo "Writing image definitions file..."
       - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:latest" > imagedefinitions.json
 
