@@ -38,7 +38,7 @@ out.println("Server Host Name :: "+inetAddress.getHostName());
 		krishna
 		machilipatnam,
 		+91-9182165046
-		tarun@gmail.com
+		boyinatarun@gmail.com
 		<br>
 		<a href="mailto:tarun@gmail.com">Mail to Mithun Technologies</a>
 	</span>
