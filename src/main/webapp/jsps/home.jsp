@@ -37,10 +37,10 @@ out.println("Server Host Name :: "+inetAddress.getHostName());
 		saint francis high school, 
 		krishna
 		machilipatnam,
-		+91-9182165046
+		+91-7702714546
 		boyinatarun@gmail.com
 		<br>
-		<a href="mailto:tarun@gmail.com">Mail to Mithun Technologies</a>
+		<a href="mailto:boyinatarun@gmail.com">Mail to Mithun Technologies</a>
 	</span>
 </div>
 <hr>
