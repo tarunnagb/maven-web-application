@@ -3,27 +3,68 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "Installing dependencies and building the Java application..."
-      - mvn clean package -DskipTests
+      - echo "Detecting branch and setting environment-specific values..."
+
+      - BRANCH_NAME=$(echo $CODEBUILD_SOURCE_VERSION | sed 's|refs/heads/||')
+      - echo "Current branch is $BRANCH_NAME"
+
+      # Set ECR URI and Maven profile based on branch
+      - |
+        if [ "$BRANCH_NAME" = "dev" ]; then
+          MAVEN_PROFILE="dev"
+          AWS_REGION="us-east-1"
+          REPOSITORY_URI=$DEV_ECR_URI
+        elif [ "$BRANCH_NAME" = "qa" ]; then
+          MAVEN_PROFILE="qa"
+          AWS_REGION="us-east-1"
+          REPOSITORY_URI=$QA_ECR_URI
+        elif [ "$BRANCH_NAME" = "main" ]; then
+          MAVEN_PROFILE=""
+          AWS_REGION="ap-south-1"
+          REPOSITORY_URI=$PROD_ECR_URI
+        else
+          echo "Unknown branch '$BRANCH_NAME'. Exiting."
+          exit 1
+        fi
+
+      - echo "Using Maven profile: $MAVEN_PROFILE"
+      - echo "Target AWS Region: $AWS_REGION"
+      - echo "Target ECR repository: $REPOSITORY_URI"
+
+      # Build Java project with Maven
+      - |
+        if [ -z "$MAVEN_PROFILE" ]; then
+          mvn clean install -DskipTests
+        else
+          mvn clean install -P$MAVEN_PROFILE -DskipTests
+        fi
+
+      # Login to ECR
       - echo "Logging in to Amazon ECR..."
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-        #- echo "Repository URI: $REPOSITORY_URI"
-        #- echo "Image Tag: $IMAGE_TAG"
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+      #- aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
-      - echo "Building the Docker image..."
+      - echo "Running SonarQube analysis..."
+      - |
+        mvn sonar:sonar \
+          -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN
+
+      - echo "Building Docker image..."
       - docker build -t $REPONAME .
-      - docker tag $REPONAME:latest $REPOSITORY_URI:5
+      - docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
 
   post_build:
     commands:
-      - echo "Pushing Docker images to Amazon ECR..."
-      - docker push $REPOSITORY_URI:5
+      - echo "Pushing Docker image to Amazon ECR..."
+      - docker push $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+
       - echo "Writing image definitions file..."
-      - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:latest" > imagedefinitions.json
+      - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json
 
 artifacts:
   files:
     - imagedefinitions.json
-
