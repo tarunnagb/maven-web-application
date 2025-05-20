@@ -42,17 +42,11 @@ phases:
       # Login to ECR
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
-      #- aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
       - echo "Running SonarQube analysis..."
-      - |
-        mvn sonar:sonar \
-          -Dsonar.projectKey=$SONAR_PROJECT_KEY \
-          -Dsonar.host.url=$SONAR_HOST_URL \
-          -Dsonar.login=$SONAR_TOKEN
-
+      - mvn sonar:sonar -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN
       - echo "Building Docker image..."
       - docker build -t $REPONAME .
       - docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
@@ -61,7 +55,6 @@ phases:
     commands:
       - echo "Pushing Docker image to Amazon ECR..."
       - docker push $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
-
       - echo "Writing image definitions file..."
       - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json
 
