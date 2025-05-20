@@ -4,11 +4,9 @@ phases:
   pre_build:
     commands:
       - echo "Detecting branch and setting environment-specific values..."
-
       - BRANCH_NAME=$(echo $CODEBUILD_SOURCE_VERSION | sed 's|refs/heads/||')
       - echo "Current branch is $BRANCH_NAME"
 
-      # Set ECR URI and Maven profile based on branch
       - |
         if [ "$BRANCH_NAME" = "dev" ]; then
           MAVEN_PROFILE="dev"
@@ -18,7 +16,7 @@ phases:
           MAVEN_PROFILE="qa"
           AWS_REGION="us-east-1"
           REPOSITORY_URI=$QA_ECR_URI
-        elif [ "$BRANCH_NAME" = "main" ]; then
+        elif [ "$BRANCH_NAME" = "develop" ]; then
           MAVEN_PROFILE=""
           AWS_REGION="ap-south-1"
           REPOSITORY_URI=$PROD_ECR_URI
@@ -31,7 +29,6 @@ phases:
       - echo "Target AWS Region: $AWS_REGION"
       - echo "Target ECR repository: $REPOSITORY_URI"
 
-      # Build Java project with Maven
       - |
         if [ -z "$MAVEN_PROFILE" ]; then
           mvn clean install -DskipTests
@@ -39,7 +36,6 @@ phases:
           mvn clean install -P$MAVEN_PROFILE -DskipTests
         fi
 
-      # Login to ECR
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
 
@@ -49,7 +45,7 @@ phases:
       - mvn sonar:sonar -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN
       - echo "Building Docker image..."
       - docker build -t $REPONAME .
-      - "docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION"
+      - docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
 
   post_build:
     commands:
