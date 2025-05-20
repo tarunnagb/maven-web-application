@@ -6,7 +6,6 @@ phases:
       - echo "Detecting branch and setting environment-specific values..."
       - BRANCH_NAME=$(echo $CODEBUILD_SOURCE_VERSION | sed 's|refs/heads/||')
       - echo "Current branch is $BRANCH_NAME"
-
       - |
         if [ "$BRANCH_NAME" = "dev" ]; then
           MAVEN_PROFILE="dev"
@@ -24,18 +23,15 @@ phases:
           echo "Unknown branch '$BRANCH_NAME'. Exiting."
           exit 1
         fi
-
       - echo "Using Maven profile: $MAVEN_PROFILE"
       - echo "Target AWS Region: $AWS_REGION"
       - echo "Target ECR repository: $REPOSITORY_URI"
-
       - |
         if [ -z "$MAVEN_PROFILE" ]; then
           mvn clean install -DskipTests
         else
           mvn clean install -P$MAVEN_PROFILE -DskipTests
         fi
-
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
 
