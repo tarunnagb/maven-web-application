@@ -6,8 +6,8 @@ phases:
       - echo "Detecting branch and setting environment-specific values..."
       - BRANCH_NAME=$(echo $CODEBUILD_SOURCE_VERSION | sed 's|refs/heads/||')
       - echo "Current branch is $BRANCH_NAME"
-
-      - |
+      
+      - >-
         if [ "$BRANCH_NAME" = "dev" ]; then
           MAVEN_PROFILE="dev"
           AWS_REGION="us-east-1"
@@ -29,7 +29,7 @@ phases:
       - echo "Target AWS Region: $AWS_REGION"
       - echo "Target ECR repository: $REPOSITORY_URI"
 
-      - |
+      - >-
         if [ -z "$MAVEN_PROFILE" ]; then
           mvn clean install -DskipTests
         else
