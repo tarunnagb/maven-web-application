@@ -1,59 +1,71 @@
 version: 0.2
 
 phases:
+  install:
+    runtime-versions:
+      java: corretto17
+      docker: 19
+    commands:
+      - echo "Generating IMAGE_TAG from git commit SHA"
+      - IMAGE_TAG=$(git rev-parse --short HEAD)
+      - echo "IMAGE_TAG=$IMAGE_TAG"
+      - export IMAGE_TAG
+
+      - echo "Determining target ECR repo and AWS region based on branch..."
+      - |
+        if [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/dev" ]; then
+          TARGET_ECR_REPO=$ECR_REPO_DEV
+          AWS_REGION=us-east-1
+        elif [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/qa" ]; then
+          TARGET_ECR_REPO=$ECR_REPO_QA
+          AWS_REGION=us-east-1
+        elif [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/develop" ]; then
+          TARGET_ECR_REPO=$ECR_REPO_PROD
+          AWS_REGION=ap-south-1
+        else
+          TARGET_ECR_REPO=$ECR_REPO_PROD
+          AWS_REGION=ap-south-1
+        fi
+      - echo "Target ECR repo: $TARGET_ECR_REPO"
+      - echo "Using AWS region: $AWS_REGION"
+      - REGISTRY=$(echo $TARGET_ECR_REPO | cut -d '/' -f 1)
+      - echo "Logging into ECR registry $REGISTRY..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
+      - echo "Login successful."
+
   pre_build:
     commands:
-      - echo "Detecting branch and setting environment-specific values..."
-      - BRANCH_NAME=$(echo $CODEBUILD_SOURCE_VERSION | sed 's|refs/heads/||')
-      - echo "Current branch is $BRANCH_NAME"
-      
-      - >-
-        if [ "$BRANCH_NAME" = "dev" ]; then
-          MAVEN_PROFILE="dev"
-          AWS_REGION="us-east-1"
-          REPOSITORY_URI=$DEV_ECR_URI
-        elif [ "$BRANCH_NAME" = "qa" ]; then
-          MAVEN_PROFILE="qa"
-          AWS_REGION="us-east-1"
-          REPOSITORY_URI=$QA_ECR_URI
-        elif [ "$BRANCH_NAME" = "develop" ]; then
-          MAVEN_PROFILE=""
-          AWS_REGION="ap-south-1"
-          REPOSITORY_URI=$PROD_ECR_URI
+      - echo "Running Maven build for branch $CODEBUILD_SOURCE_VERSION..."
+      - |
+        if [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/dev" ]; then
+          echo "Using Maven profile 'dev'"
+          mvn clean install -Pdev
+        elif [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/qa" ]; then
+          echo "Using Maven profile 'qa'"
+          mvn clean install -Pqa
+        elif [ "$CODEBUILD_SOURCE_VERSION" == "refs/heads/develop" ]; then
+          echo "Using default Maven build"
+          mvn clean install
         else
-          echo "Unknown branch '$BRANCH_NAME'. Exiting."
-          exit 1
+          echo "Branch unknown, using default Maven build"
+          mvn clean install
         fi
-
-      - echo "Using Maven profile: $MAVEN_PROFILE"
-      - echo "Target AWS Region: $AWS_REGION"
-      - echo "Target ECR repository: $REPOSITORY_URI"
-
-      - >-
-        if [ -z "$MAVEN_PROFILE" ]; then
-          mvn clean install -DskipTests
-        else
-          mvn clean install -P$MAVEN_PROFILE -DskipTests
-        fi
-
-      - echo "Logging in to Amazon ECR..."
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - echo "Running SonarQube analysis..."
+      - mvn sonar:sonar -Dsonar.projectKey=my-project -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN
 
   build:
     commands:
-      - echo "Running SonarQube analysis..."
-      - mvn sonar:sonar -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN
-      - echo "Building Docker image..."
-      - docker build -t $REPONAME .
-      - docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo "Building Docker image with tag $IMAGE_TAG..."
+      - docker build -t $REPONAME:$IMAGE_TAG .
+      - echo "Tagging Docker image for ECR: $TARGET_ECR_REPO:$IMAGE_TAG"
+      - docker tag REPONAME:$IMAGE_TAG $TARGET_ECR_REPO:$IMAGE_TAG
 
   post_build:
     commands:
-      - echo "Pushing Docker image to Amazon ECR..."
-      - docker push $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
-      - echo "Writing image definitions file..."
-      - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json
+      - echo "Pushing Docker image to ECR repo $TARGET_ECR_REPO..."
+      - docker push $TARGET_ECR_REPO:$IMAGE_TAG
+      - echo "Build and push completed at `date`."
 
 artifacts:
   files:
-    - imagedefinitions.json
+    - target/**/*.war
