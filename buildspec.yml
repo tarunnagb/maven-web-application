@@ -41,12 +41,12 @@ phases:
       - mvn sonar:sonar -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN
       - echo "Building Docker image..."
       - docker build -t $REPONAME .
-      - docker tag $REPONAME:latest $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker tag $REPONAME:latest $REPOSITORY_URI:latest
 
   post_build:
     commands:
       - echo "Pushing Docker image to Amazon ECR..."
-      - docker push $REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $REPOSITORY_URI:latest
       - echo "Writing image definitions file..."
       - printf '[{"name":"my-container","imageUri":"%s"}]' "$REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json
 
